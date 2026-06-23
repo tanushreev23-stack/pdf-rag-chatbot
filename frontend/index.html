@@ -355,7 +355,19 @@
 <body>
 
 <input type="file" id="file-input" accept=".pdf" style="display:none">
-
+<!-- History Panel -->
+<div id="history-panel" style="
+    position:fixed;right:-320px;top:0;width:320px;height:100vh;
+    background:#fff;border-left:1px solid #e0e0d8;
+    padding:1.25rem;overflow-y:auto;
+    transition:right 0.3s;z-index:1000;
+    box-shadow:-4px 0 20px rgba(0,0,0,0.1)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <h3 style="font-size:15px;font-weight:600">Chat History</h3>
+        <button onclick="toggleHistory()" style="border:none;background:none;cursor:pointer;font-size:18px">✕</button>
+    </div>
+    <div id="history-list"></div>
+</div>
 <div class="app">
   <!-- SIDEBAR -->
   <div class="sidebar">
@@ -678,6 +690,79 @@
     questionInput.value = btn.textContent;
     sendQuestion();
   }
+let historyOpen = false;
+
+function toggleHistory() {
+    historyOpen = !historyOpen;
+    const panel = document.getElementById('history-panel');
+    panel.style.right = historyOpen ? '0' : '-320px';
+    if (historyOpen) loadHistory();
+}
+
+async function loadHistory() {
+    try {
+        const res = await fetch(`${API}/history`);
+        const data = await res.json();
+        const list = document.getElementById('history-list');
+
+        if (!data.sessions.length) {
+            list.innerHTML = '<p style="color:#aaa;font-size:13px">No history yet</p>';
+            return;
+        }
+
+        list.innerHTML = data.sessions.map(s => `
+            <div onclick="loadSession('${s.session_id}')" style="
+                padding:0.75rem;border:1px solid #e0e0d8;
+                border-radius:10px;margin-bottom:8px;cursor:pointer;
+                transition:background 0.2s"
+                onmouseover="this.style.background='#f5f5f0'"
+                onmouseout="this.style.background='#fff'">
+                <div style="font-size:13px;font-weight:600;color:#1a1a18;margin-bottom:4px">
+                    📄 ${s.first_question}
+                </div>
+                <div style="font-size:11px;color:#aaa">
+                    ${s.message_count} messages · ${s.last_message}
+                </div>
+                <div style="font-size:11px;color:#185FA5;margin-top:2px">
+                    Session: ${s.session_id}
+                </div>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Failed to load history:', err);
+    }
+}
+
+async function loadSession(sid) {
+    try {
+        const res = await fetch(`${API}/history/${sid}`);
+        const data = await res.json();
+
+        sessionId = sid;
+        sessionIdText.textContent = sid;
+        sessionBox.classList.add('show');
+
+        // Clear chat and reload messages
+        messagesEl.innerHTML = '';
+        document.getElementById('empty-state') &&
+            (document.getElementById('empty-state').style.display = 'none');
+
+        data.messages.forEach(msg => {
+            addMessage(msg.role, msg.role === 'user' ?
+                sanitize(msg.content) :
+                formatMarkdown(msg.content),
+                msg.sources || []
+            );
+        });
+
+        questionInput.disabled = false;
+        sendBtn.disabled = false;
+        toggleHistory();
+
+    } catch (err) {
+        console.error('Failed to load session:', err);
+    }
+}
 </script>
 </body>
 </html>

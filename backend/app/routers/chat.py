@@ -3,6 +3,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from pydantic import BaseModel
 from app.services.rag_chain import build_rag_chain
+from app.services.database import save_message, get_messages
 from app.utils.logger import logger
 import time
 
@@ -27,6 +28,7 @@ async def ask_question(request: Request, body: QuestionRequest):
         source_docs = retriever.invoke(body.question)
         answer = chain.invoke(body.question)
         elapsed = round(time.time() - start, 2)
+
         sources = [
             {
                 "page": doc.metadata.get("page"),
@@ -35,6 +37,11 @@ async def ask_question(request: Request, body: QuestionRequest):
             }
             for doc in source_docs
         ]
+
+        # Save to MongoDB
+        await save_message(body.session_id, "user", body.question)
+        await save_message(body.session_id, "assistant", answer, sources)
+
         logger.info(f"Answer in {elapsed}s | session: {body.session_id}")
         return {
             "success": True,
@@ -44,4 +51,9 @@ async def ask_question(request: Request, body: QuestionRequest):
         }
     except Exception as e:
         logger.error(f"Question failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get answer: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+
+@router.get("/history/{session_id}")
+async def get_history(session_id: str):
+    messages = await get_messages(session_id)
+    return {"session_id": session_id, "messages": messages}

@@ -9,8 +9,11 @@ class Settings(BaseSettings):
     pinecone_index_name: str = "pdf-chatbot"
     app_env: str = "development"
     log_level: str = "INFO"
+    mongodb_uri: str
+    mongodb_db: str = "pdf_chatbot"
 
     class Config:
         env_file = str(env_path)
+        extra = "ignore"          # ← this line ignores extra params like appName
 
 settings = Settings()
